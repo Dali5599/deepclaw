@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  deepclaw:
+    build: .
+    container_name: deepclaw-engine
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DATABASE_URL=sqlite+aiosqlite:///./deepclaw.db
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
+    volumes:
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    restart: unless-stopped
