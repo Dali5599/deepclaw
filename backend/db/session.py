@@ -1,18 +1,21 @@
 """
-DeepClaw Database Session Management
-Async SQLite with WAL mode support
+DeepClaw Database Session Module - Async SQLite WAL
+Enterprise-grade async connection management with backward compatibility.
 """
+
 import logging
 import uuid
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.pool import StaticPool
 from sqlalchemy import event
 
-from ..config import settings
 from .models import Base, Session as SessionModel, ResearchStatus
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 
+# Assurer le driver aiosqlite pour SQLite
 database_url = settings.database_url
 if database_url.startswith("sqlite://"):
     database_url = database_url.replace("sqlite://", "sqlite+aiosqlite://")
@@ -20,7 +23,9 @@ if database_url.startswith("sqlite://"):
 engine = create_async_engine(
     database_url,
     echo=getattr(settings, "database_echo", False),
-    future=True
+    future=True,
+    poolclass=StaticPool,
+    connect_args={"check_same_thread": False} if "sqlite" in str(database_url) else {},
 )
 
 @event.listens_for(engine.sync_engine, "connect")
@@ -28,10 +33,11 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
     if "sqlite" in str(database_url):
         cursor = dbapi_connection.cursor()
         try:
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA synchronous=NORMAL")
-            cursor.execute("PRAGMA busy_timeout=5000")
-            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA synchronous=NORMAL;")
+            cursor.execute("PRAGMA busy_timeout=5000;")
+            cursor.execute("PRAGMA temp_store=MEMORY;")
+            cursor.execute("PRAGMA foreign_keys=ON;")
         finally:
             cursor.close()
 
@@ -39,11 +45,12 @@ async_session_factory = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
     expire_on_commit=False,
+    autoflush=False,
     autocommit=False,
-    autoflush=False
 )
 
-# Compatibility query wrapper for legacy routes if needed
+AsyncSessionLocal = async_session_factory
+
 class _CompatQuery:
     def __init__(self, model):
         self.model = model
@@ -66,7 +73,7 @@ class SessionLocalWrapper:
 SessionLocal = SessionLocalWrapper()
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency for obtaining an async database session."""
+    """FastAPI dependency yielding an async database session."""
     async with async_session_factory() as session:
         try:
             yield session
@@ -80,7 +87,7 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
 get_db_session = get_async_session
 
 def create_sessions(topic: str, depth: int = 3, max_sources: int = 10, **kwargs):
-    """Instantiate a new research Session object."""
+    """Instantiate a new research Session model."""
     return SessionModel(
         id=str(uuid.uuid4()),
         topic=topic,
@@ -91,13 +98,21 @@ def create_sessions(topic: str, depth: int = 3, max_sources: int = 10, **kwargs)
     )
 
 async def create_tables():
-    """Create all database tables asynchronously."""
+    """Create all tables asynchronously."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables verified/created successfully.")
+    logger.info("Database tables verified/created.")
 
 async def drop_tables():
-    """Drop all database tables asynchronously."""
+    """Drop all tables asynchronously."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    logger.info("Database tables dropped successfully.")
+    logger.info("Database tables dropped.")
+
+async def check_db_health() -> bool:
+    try:
+        async with async_session_factory() as session:
+            await session.execute("SELECT 1")
+            return True
+    except Exception:
+        return False

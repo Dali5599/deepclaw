@@ -1,0 +1,33 @@
+{
+  "name": "deepclaw-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Frontend for DeepClaw - Autonomous Deep Research & Fact-Synthesis Engine",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview",
+    "test": "vitest",
+    "lint": "eslint src --ext .tsx,.ts,.jsx,.js",
+    "format": "prettier --write src"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.8.0",
+    "lucide-react": "^0.263.0",
+    "tailwindcss": "^3.2.4",
+    "autoprefixer": "^10.4.8",
+    "postcss": "^8.4.16"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@vitejs/plugin-react": "^3.1.0",
+    "typescript": "^4.9.0",
+    "vite": "^4.0.0",
+    "vitest": "^0.25.0",
+    "eslint": "^8.28.0",
+    "prettier": "^2.8.0"
+  }
+}
